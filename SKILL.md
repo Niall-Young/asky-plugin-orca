@@ -9,3 +9,5 @@ Use plugin_orca__submit_task when the user explicitly asks to give a development
 - `not_submitted` means prompt not sent; `unknown` and native pendingVerification mean the outcome is uncertain. Never automatically recreate the worktree or resend the prompt.
 - Stop after handoff. Query progress with plugin_orca__query_handoff only when asked. Terminal idle does not prove task completion.
 - Use plugin_orca__send_message only for user-requested follow-ups. Do not automatically merge, delete worktrees, publish, or stop the receiving Agent.
+
+If terminal matching is ambiguous, show the returned candidate handles and ask the user to choose. Pass the chosen terminalHandle to query_handoff or send_message; never guess a terminal.

@@ -6,8 +6,19 @@
   "entry": "index.mjs",
   "instructions": "SKILL.md",
   "configuration": [
-    {"key": "cli_path", "label": "Orca CLI", "type": "path", "defaultValue": "orca"},
-    {"key": "default_agent", "label": "Default Agent", "type": "text", "required": true, "defaultValue": "codex"}
+    {
+      "key": "cli_path",
+      "label": "Orca CLI",
+      "type": "path",
+      "defaultValue": "orca"
+    },
+    {
+      "key": "default_agent",
+      "label": "Default Agent",
+      "type": "text",
+      "required": true,
+      "defaultValue": "codex"
+    }
   ],
   "tools": [
     {
@@ -16,7 +27,30 @@
       "effect": "write",
       "confirmation": "explicitDirectOtherwiseConfirm",
       "timeoutSeconds": 240,
-      "inputSchema": {"type": "object", "required": ["projectPath", "prompt"], "additionalProperties": false, "properties": {"projectPath": {"type": "string", "minLength": 1}, "prompt": {"type": "string", "minLength": 1}, "agent": {"type": "string"}, "name": {"type": "string"}}}
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "projectPath",
+          "prompt"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "projectPath": {
+            "type": "string",
+            "minLength": 1
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1
+          },
+          "agent": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      }
     },
     {
       "name": "query_handoff",
@@ -24,7 +58,23 @@
       "effect": "read",
       "confirmation": "never",
       "timeoutSeconds": 20,
-      "inputSchema": {"type": "object", "required": ["handoffID"], "additionalProperties": false, "properties": {"handoffID": {"type": "string", "minLength": 1}}}
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "handoffID"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "handoffID": {
+            "type": "string",
+            "minLength": 1
+          },
+          "terminalHandle": {
+            "type": "string",
+            "description": "仅在终端匹配不唯一时，使用用户明确选择的该工作区 terminal handle。"
+          }
+        }
+      }
     },
     {
       "name": "send_message",
@@ -32,7 +82,28 @@
       "effect": "write",
       "confirmation": "explicitDirectOtherwiseConfirm",
       "timeoutSeconds": 120,
-      "inputSchema": {"type": "object", "required": ["handoffID", "prompt"], "additionalProperties": false, "properties": {"handoffID": {"type": "string", "minLength": 1}, "prompt": {"type": "string", "minLength": 1}}}
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "handoffID",
+          "prompt"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "handoffID": {
+            "type": "string",
+            "minLength": 1
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1
+          },
+          "terminalHandle": {
+            "type": "string",
+            "description": "仅在终端匹配不唯一时，使用用户明确选择的该工作区 terminal handle。"
+          }
+        }
+      }
     }
   ]
 }

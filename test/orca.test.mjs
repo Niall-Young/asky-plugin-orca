@@ -95,3 +95,11 @@ test('delivery never infers completion from acceptance', () => {
   assert.equal(delivery({ accepted: true }), 'input_accepted');
   assert.equal(delivery({ accepted: false }), 'unknown');
 });
+
+test('explicit terminal choice resolves an ambiguous handoff and rejects foreign handles', async () => {
+  const { ctx } = context({ stale: true, ambiguous: true });
+  const record = await plugin.tools.submit_task.execute(args, ctx);
+  await assert.rejects(plugin.tools.query_handoff.execute({ handoffID: record.handoffID, terminalHandle: 'foreign' }, ctx));
+  const query = await plugin.tools.query_handoff.execute({ handoffID: record.handoffID, terminalHandle: 'a' }, ctx);
+  assert.equal(query.terminalHandle, 'a');
+});

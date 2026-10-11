@@ -31,7 +31,7 @@ https://github.com/Niall-Young/asky-plugin-orca
 
 > 将 /absolute/path/to/project 添加到 Orca，启动 Codex，帮我检查项目测试失败的原因。
 
-默认创建独立 worktree，使用项目默认 base；原目录未提交的修改不会复制过去。未指定 Agent 时使用 `codex`。交接完成后可要求查询交接 ID 的进度，或向它发送后续任务。
+默认创建独立 worktree，使用项目默认 base；原目录未提交的修改不会复制过去。未指定 Agent 时使用 `codex`。交接完成后可要求查询交接 ID 的进度，或向它发送后续任务。终端匹配不唯一时，选择返回候选中的 terminalHandle 再查询或发送。
 
 `input_accepted` 只表示输入已接收，`turn_started` 表示观察到 Agent 开始执行；两者都不表示开发任务完成。`not_submitted` 表示尚未发送，`unknown` 表示需核实。不会自动合并、发布、删除工作区或停止 Agent。
 
@@ -87,7 +87,7 @@ Ask Asky:
 
 > Add /absolute/path/to/project to Orca, launch Codex, and investigate the failing tests.
 
-The default is an independent worktree from the repository default base. Uncommitted changes in the original checkout are not copied. The default Agent is `codex`. Ask to query the returned handoff ID or send it a follow-up prompt.
+The default is an independent worktree from the repository default base. Uncommitted changes in the original checkout are not copied. The default Agent is `codex`. Ask to query the returned handoff ID or send it a follow-up prompt. If terminal matching is ambiguous, choose a returned candidate terminalHandle before querying or sending.
 
 `input_accepted` means input was accepted; `turn_started` means an Agent turn was observed to start. Neither proves task completion. `not_submitted` means no prompt was sent; `unknown` requires verification. The plugin does not automatically merge, publish, delete workspaces, or stop Agents.
 

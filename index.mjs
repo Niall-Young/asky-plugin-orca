@@ -30,14 +30,19 @@ export function delivery(receipt) {
       stages.some(stage => (typeof stage === 'string' ? stage : stage.stage ?? stage.name) === 'input_accepted')) return 'input_accepted';
   return 'unknown';
 }
-async function resolveHandle(record, cli, ctx) {
+async function resolveHandle(record, cli, ctx, selected) {
+  if (selected) {
+    const terminals = collection(await cli(['terminal', 'list', '--worktree', `id:${record.worktreeID}`]), 'terminals');
+    if (!terminals.some(t => t.handle === selected && (t.agentIdentity === record.agent || t.agentId === record.agent || t.agent === record.agent))) fail('Selected terminal does not belong to the requested Agent in this worktree.');
+    record.terminalHandle = selected; await save(ctx); return selected;
+  }
   if (record.terminalHandle) {
     try { await cli(['terminal', 'show', '--terminal', record.terminalHandle]); return record.terminalHandle; }
     catch (error) { if (!String(error).includes('terminal_handle_stale') && !String(error).includes('terminal_not_found')) throw error; }
   }
   const terminals = collection(await cli(['terminal', 'list', '--worktree', `id:${record.worktreeID}`]), 'terminals');
   const matches = terminals.filter(t => t.agentIdentity === record.agent || t.agent === record.agent || t.agentId === record.agent || t.agent?.id === record.agent || t.handle === record.terminalHandle);
-  if (matches.length !== 1) fail('Agent terminal is missing or ambiguous. Select the intended terminal in Orca; no message was sent.');
+  if (matches.length !== 1) fail(`Agent terminal is missing or ambiguous. Ask the user to choose terminalHandle from ${JSON.stringify(matches.map(t => ({handle:t.handle, title:t.title})))}; no message was sent.`);
   record.terminalHandle = matches[0].handle; await save(ctx); return record.terminalHandle;
 }
 async function ready(cli, handle) {
@@ -102,7 +107,7 @@ async function query(args, ctx) {
   const cli = client(ctx); await recover(record, cli, ctx);
   if (!record.worktreeID) return summary(record);
   const worktree = await cli(['worktree', 'show', '--worktree', `id:${record.worktreeID}`]);
-  const handle = await resolveHandle(record, cli, ctx);
+  const handle = await resolveHandle(record, cli, ctx, args.terminalHandle);
   const terminal = await cli(['terminal', 'show', '--terminal', handle]);
   const output = await cli(['terminal', 'read', '--terminal', handle, '--limit', '200']);
   return { ...summary(record), worktree, terminal, output, note: 'Terminal state and output are observations, not proof that the development task is completed.' };
@@ -112,7 +117,7 @@ async function send(args, ctx) {
   if (!record || !record.worktreeID) fail('Unknown or incomplete handoff.');
   if (!args.prompt?.trim()) fail('A nonempty prompt is required.');
   if (s.messages[ctx.requestID]) return summary(s.messages[ctx.requestID]);
-  const cli = client(ctx), handle = await resolveHandle(record, cli, ctx);
+  const cli = client(ctx), handle = await resolveHandle(record, cli, ctx, args.terminalHandle);
   await cli(['terminal', 'read', '--terminal', handle, '--limit', '100']);
   const idle = await cli(['terminal', 'wait', '--terminal', handle, '--for', 'tui-idle', '--timeout-ms', '60000'], 65);
   if (!(idle.wait?.satisfied ?? idle.satisfied)) return { handoffID: args.handoffID, stage: 'not_submitted', error: 'Agent is not ready; message was not sent.' };
