@@ -20,7 +20,7 @@ function context(mode = {}) {
       else if (key === 'terminal wait') result = { wait: { satisfied: !mode.notReady } };
       else if (key === 'terminal send') {
         if (mode.sendFailure) throw new Error('transport lost after send');
-        result = { accepted: true, requestId: 'submission', stages: mode.started ? ['input_accepted', 'turn_started'] : ['input_accepted'] };
+        result = { send: { accepted: true, prompt: { requestId: 'submission', stages: mode.started ? ['input_accepted', 'turn_started'] : ['input_accepted'] } }, mutation: { requestId: 'submission' } };
       } else if (key === 'terminal show' && mode.stale && args.includes('handle')) throw new Error('terminal_handle_stale');
       else if (key === 'terminal list') result = { terminals: mode.ambiguous ? [{ handle: 'a', agentIdentity: 'codex' }, { handle: 'b', agentIdentity: 'codex' }] : [{ handle: 'replacement', agentIdentity: 'codex' }] };
       else result = {};

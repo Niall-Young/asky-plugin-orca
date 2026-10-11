@@ -21,7 +21,8 @@ function summary(record) {
   return Object.fromEntries(Object.entries(record).filter(([key]) => !['prompt', 'receipt', 'createdAt'].includes(key)));
 }
 export function delivery(receipt) {
-  const stages = receipt?.stages ?? [];
+  receipt = receipt?.send ?? receipt;
+  const stages = receipt?.prompt?.stages ?? receipt?.stages ?? [];
   const started = receipt?.stage === 'turn_started' || receipt?.submission?.stage === 'turn_started' ||
     stages.some(stage => (typeof stage === 'string' ? stage : stage.stage ?? stage.name) === 'turn_started');
   if (started) return 'turn_started';
@@ -79,7 +80,7 @@ async function submit(args, ctx) {
     if (!await ready(cli, handle)) { record.error = 'Agent is not ready; prompt was not sent.'; await save(ctx); return summary(record); }
     record.sendAttempted = true; record.stage = 'unknown'; await save(ctx);
     const receipt = await cli(['terminal', 'send', '--terminal', handle, '--text', args.prompt, '--enter', '--wait-submit', '10'], 15);
-    record.receipt = receipt; record.submissionRequestID = receipt.requestId ?? receipt.requestID ?? receipt.submission?.requestId;
+    record.receipt = receipt; record.submissionRequestID = receipt.mutation?.requestId ?? receipt.send?.prompt?.requestId ?? receipt.requestId ?? receipt.requestID ?? receipt.submission?.requestId;
     record.stage = delivery(receipt); await save(ctx); return summary(record);
   } catch (error) {
     record.error = String(error.message ?? error);
@@ -119,7 +120,7 @@ async function send(args, ctx) {
   await save(ctx);
   try {
     const receipt = await cli(['terminal', 'send', '--terminal', handle, '--text', args.prompt, '--enter', '--wait-submit', '10'], 15);
-    message.stage = delivery(receipt); message.submissionRequestID = receipt.requestId ?? receipt.requestID ?? receipt.submission?.requestId; message.receipt = receipt;
+    message.stage = delivery(receipt); message.submissionRequestID = receipt.mutation?.requestId ?? receipt.send?.prompt?.requestId ?? receipt.requestId ?? receipt.requestID ?? receipt.submission?.requestId; message.receipt = receipt;
   } catch (error) { message.error = String(error.message ?? error); }
   await save(ctx); return summary(message);
 }
