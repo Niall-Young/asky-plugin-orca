@@ -1,0 +1,38 @@
+{
+  "id": "orca",
+  "name": "Orca",
+  "version": "0.1.0",
+  "apiVersion": 1,
+  "entry": "index.mjs",
+  "instructions": "SKILL.md",
+  "configuration": [
+    {"key": "cli_path", "label": "Orca CLI", "type": "path", "defaultValue": "orca"},
+    {"key": "default_agent", "label": "Default Agent", "type": "text", "required": true, "defaultValue": "codex"}
+  ],
+  "tools": [
+    {
+      "name": "submit_task",
+      "description": "将用户明确要求的开发任务交给 Orca：添加或复用 Git 项目，新建独立 worktree，启动指定 Agent 并提交 prompt。返回交接 ID，不等待开发任务完成。",
+      "effect": "write",
+      "confirmation": "explicitDirectOtherwiseConfirm",
+      "timeoutSeconds": 240,
+      "inputSchema": {"type": "object", "required": ["projectPath", "prompt"], "additionalProperties": false, "properties": {"projectPath": {"type": "string", "minLength": 1}, "prompt": {"type": "string", "minLength": 1}, "agent": {"type": "string"}, "name": {"type": "string"}}}
+    },
+    {
+      "name": "query_handoff",
+      "description": "按交接 ID 查询 Orca 工作区、Agent 终端状态与有限输出。终端空闲不证明开发任务完成。",
+      "effect": "read",
+      "confirmation": "never",
+      "timeoutSeconds": 20,
+      "inputSchema": {"type": "object", "required": ["handoffID"], "additionalProperties": false, "properties": {"handoffID": {"type": "string", "minLength": 1}}}
+    },
+    {
+      "name": "send_message",
+      "description": "向已交接的 Orca Agent 发送用户明确要求的后续 prompt。返回接收回执，不等待执行完成。",
+      "effect": "write",
+      "confirmation": "explicitDirectOtherwiseConfirm",
+      "timeoutSeconds": 120,
+      "inputSchema": {"type": "object", "required": ["handoffID", "prompt"], "additionalProperties": false, "properties": {"handoffID": {"type": "string", "minLength": 1}, "prompt": {"type": "string", "minLength": 1}}}
+    }
+  ]
+}
