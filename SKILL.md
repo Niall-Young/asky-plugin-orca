@@ -1,13 +1,26 @@
-# Orca task handoff
+---
+name: asky-orca-cli
+description: Operate Orca through its installed CLI when the user asks to inspect projects, manage workspaces, launch an Agent, hand off work, or use other Orca capabilities.
+---
 
-Use plugin_orca__submit_task when the user explicitly asks to give a development task to Orca or launch an Agent there.
+# Orca CLI
 
-- Require an absolute Git repository path and the actual task prompt. Ask when the project is missing or ambiguous; never use Asky's runtime directory as the project.
-- Respect a specified Agent ID; otherwise use the plugin default. Do not invent model/effort launch arguments.
-- The plugin creates an independent worktree from the repository default base. Uncommitted changes in the original checkout are not copied. If the task depends on those changes, explain this and ask the user to prepare a committed base.
-- Return the handoff ID, Agent, worktree path, and delivery stage. `input_accepted` means input accepted; `turn_started` means a turn was observed to start. Neither means the task completed.
-- `not_submitted` means prompt not sent; `unknown` and native pendingVerification mean the outcome is uncertain. Never automatically recreate the worktree or resend the prompt.
-- Stop after handoff. Query progress with plugin_orca__query_handoff only when asked. Terminal idle does not prove task completion.
-- Use plugin_orca__send_message only for user-requested follow-ups. Do not automatically merge, delete worktrees, publish, or stop the receiving Agent.
+The plugin connects the configured Orca executable to Asky's ToolService. Choose CLI commands from the installed version's documentation, rather than a fixed plugin workflow.
 
-If terminal matching is ambiguous, show the returned candidate handles and ask the user to choose. Pass the chosen terminalHandle to query_handoff or send_message; never guess a terminal.
+## Discover before acting
+
+Use `plugin_orca__cli_query` with `arguments: ["skills", "get", "orca-cli"]` at the start of Orca work. Read that guide and load its relevant references through the same tool. Use command `--help` when further flags are needed. If this version explicitly rejects `skills get`, use command help and the read-only inventory; do not invent flags or silently switch executables.
+
+Use `arguments: ["status"]` to check availability and `["repo", "list"]` to discover projects. Match the user's project name against returned display names and paths; use the returned exact repo ID in commands. When several projects match, show their names and ask which one. If no project was named, show the inventory and ask which project. Do not pick Asky's installation/runtime directory or infer the focused project from the plugin's working directory. An already opened project does not require a user-supplied absolute path. Only adding a new project needs its actual directory.
+
+## Execute and verify
+
+`plugin_orca__cli_query` runs help, skill discovery and classified read commands. `plugin_orca__cli_execute` runs other CLI commands within the user's requested scope and the host's write policy. Both take an `arguments` array without the executable; optional `timeoutSeconds` is 1–120. Pass literal argv, never shell command strings. Commands whose read classification is unknown can use cli_execute with the host write policy.
+
+Follow the live guide for worktree creation, terminal readiness, prompt submission, browser operations, and other tasks. Respect the user's Agent, checkout, model and effort choices. For a handoff with no checkout preference, prefer an independent worktree from the repo default base. State if required uncommitted changes would be absent there.
+
+Write calls persist a request checkpoint before execution. `command_returned` proves only that the CLI returned successfully; inspect its actual result and use cli_query for command-specific observations. Native pendingVerification and `unknown` mean uncertainty. Never repeat an uncertain create or send automatically. Readback never replays writes. A retry with the same host request ID returns the saved record.
+
+For a handoff, report the full worktree ID, Agent terminal handle and actual send receipt. `input_accepted` and `turn_started` do not prove task completion. Stop after confirmed acceptance unless asked to monitor. Do not automatically merge, publish, delete, or stop Agents.
+
+`plugin_orca__query_handoff` and `plugin_orca__send_message` support handoff IDs saved by older plugin versions. For new CLI workflows, use the returned repo/worktree IDs and terminal handles directly. On stale or ambiguous terminal handles, re-list and resolve the intended Agent; never dual-send or guess.

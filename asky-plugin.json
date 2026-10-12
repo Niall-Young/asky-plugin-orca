@@ -1,7 +1,7 @@
 {
   "id": "orca",
   "name": "Orca",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "apiVersion": 1,
   "entry": "index.mjs",
   "instructions": "SKILL.md",
@@ -11,43 +11,59 @@
       "label": "Orca CLI",
       "type": "path",
       "defaultValue": "orca"
-    },
-    {
-      "key": "default_agent",
-      "label": "Default Agent",
-      "type": "text",
-      "required": true,
-      "defaultValue": "codex"
     }
   ],
   "tools": [
     {
-      "name": "submit_task",
-      "description": "将用户明确要求的开发任务交给 Orca：添加或复用 Git 项目，新建独立 worktree，启动指定 Agent 并提交 prompt。返回交接 ID，不等待开发任务完成。",
-      "effect": "write",
-      "confirmation": "explicitDirectOtherwiseConfirm",
-      "timeoutSeconds": 240,
+      "name": "cli_query",
+      "description": "读取 Orca 当前版本 CLI 指导、命令帮助、已打开项目、工作区与终端状态。项目名与 ID 通过 repo list 发现，无需用户提供绝对路径。",
+      "effect": "read",
+      "confirmation": "never",
+      "timeoutSeconds": 130,
       "inputSchema": {
         "type": "object",
         "required": [
-          "projectPath",
-          "prompt"
+          "arguments"
         ],
         "additionalProperties": false,
         "properties": {
-          "projectPath": {
-            "type": "string",
-            "minLength": 1
+          "arguments": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Orca CLI argv，不包含可执行文件。先读 skills get orca-cli；例如 [\"repo\", \"list\"]。"
           },
-          "prompt": {
-            "type": "string",
-            "minLength": 1
+          "timeoutSeconds": {
+            "type": "integer",
+            "description": "单次 CLI 超时，1–120 秒，默认 20。"
+          }
+        }
+      }
+    },
+    {
+      "name": "cli_execute",
+      "description": "按用户要求执行 Orca CLI 命令，以 argv 传参。先用 cli_query 读取实时文档、发现项目；支持 Orca 当前版本能力，不限定固定交接流程。命令返回不等于任务完成；用 cli_query 回读目标。",
+      "effect": "write",
+      "confirmation": "explicitDirectOtherwiseConfirm",
+      "timeoutSeconds": 140,
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "arguments"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "arguments": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Orca CLI argv，不包含可执行文件。先读 skills get orca-cli；例如 [\"repo\", \"list\"]。"
           },
-          "agent": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
+          "timeoutSeconds": {
+            "type": "integer",
+            "description": "单次 CLI 超时，1–120 秒，默认 20。"
           }
         }
       }

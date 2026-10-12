@@ -1,10 +1,5 @@
-import { createHash } from 'node:crypto';
-import { isAbsolute, normalize } from 'node:path';
-
-const shortID = id => createHash('sha256').update(id).digest('hex').slice(0, 12);
 const fail = message => { throw new Error(message); };
 const collection = (result, key) => Array.isArray(result) ? result : result?.[key] ?? [];
-const canonical = path => normalize(path).replace(/\/$/, '');
 function client(ctx) {
   const executable = ctx.configuration.cli_path || 'orca';
   return async (args, seconds = 20) => {
@@ -45,54 +40,6 @@ async function resolveHandle(record, cli, ctx, selected) {
   if (matches.length !== 1) fail(`Agent terminal is missing or ambiguous. Ask the user to choose terminalHandle from ${JSON.stringify(matches.map(t => ({handle:t.handle, title:t.title})))}; no message was sent.`);
   record.terminalHandle = matches[0].handle; await save(ctx); return record.terminalHandle;
 }
-async function ready(cli, handle) {
-  for (const timeout of [60000, 90000]) {
-    const result = await cli(['terminal', 'wait', '--terminal', handle, '--for', 'tui-idle', '--timeout-ms', String(timeout)], timeout / 1000 + 5);
-    if (result.wait?.satisfied === true || result.satisfied === true) return true;
-  }
-  return false;
-}
-async function submit(args, ctx) {
-  if (!isAbsolute(args.projectPath ?? '') || !args.prompt?.trim()) fail('An absolute Git project path and a nonempty prompt are required.');
-  const agent = args.agent || ctx.configuration.default_agent || 'codex';
-  if (!/^[a-zA-Z0-9_-]+$/.test(agent)) fail('Invalid Agent ID.');
-  const cli = client(ctx), s = state(ctx), id = `orca-${shortID(ctx.requestID)}`;
-  let record = s.handoffs[id];
-  if (record) {
-    // Recovery is read-only: never replay an uncertain create or prompt.
-    return await recover(record, cli, ctx);
-  }
-  record = s.handoffs[id] = { handoffID: id, projectPath: canonical(args.projectPath), agent, prompt: args.prompt,
-    name: `${(args.name || 'asky-task').replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 40)}-${shortID(ctx.requestID)}`,
-    stage: 'not_submitted', createdAt: new Date().toISOString() };
-  await save(ctx);
-  try {
-    let status = await cli(['status']);
-    if (status.app?.running !== true) { await cli(['open']); status = await cli(['status']); }
-    if (status.runtime?.reachable !== true) fail('Orca runtime is unavailable. Open Orca and retry after checking the handoff.');
-    const repos = collection(await cli(['repo', 'list']), 'repos');
-    let repo = repos.find(r => canonical(r.path ?? '') === record.projectPath);
-    if (!repo) { const result = await cli(['repo', 'add', '--path', record.projectPath]); repo = result.repo ?? result; }
-    if (!repo.id) fail('Orca did not return a repository ID.');
-    record.repoID = repo.id; record.createAttempted = true; await save(ctx);
-    const result = await cli(['worktree', 'create', '--repo', `id:${repo.id}`, '--name', record.name, '--no-parent', '--agent', agent], 60);
-    const worktree = result.worktree ?? result;
-    if (!worktree.id || !worktree.path) fail('Orca did not return the complete worktree identity.');
-    record.worktreeID = worktree.id; record.worktreePath = worktree.path;
-    record.terminalHandle = result.agentTerminalHandle ?? result.startupTerminal?.handle;
-    await save(ctx);
-    const handle = await resolveHandle(record, cli, ctx);
-    if (!await ready(cli, handle)) { record.error = 'Agent is not ready; prompt was not sent.'; await save(ctx); return summary(record); }
-    record.sendAttempted = true; record.stage = 'unknown'; await save(ctx);
-    const receipt = await cli(['terminal', 'send', '--terminal', handle, '--text', args.prompt, '--enter', '--wait-submit', '10'], 15);
-    record.receipt = receipt; record.submissionRequestID = receipt.mutation?.requestId ?? receipt.send?.prompt?.requestId ?? receipt.requestId ?? receipt.requestID ?? receipt.submission?.requestId;
-    record.stage = delivery(receipt); await save(ctx); return summary(record);
-  } catch (error) {
-    record.error = String(error.message ?? error);
-    if (record.createAttempted && !record.worktreeID || record.sendAttempted) record.stage = 'unknown';
-    await save(ctx); return summary(record);
-  }
-}
 async function recover(record, cli, ctx) {
   if (!record.worktreeID && record.createAttempted && record.repoID) {
     const worktrees = collection(await cli(['worktree', 'list', '--repo', `id:${record.repoID}`]), 'worktrees');
@@ -129,12 +76,70 @@ async function send(args, ctx) {
   } catch (error) { message.error = String(error.message ?? error); }
   await save(ctx); return summary(message);
 }
+// Only documented observations are accepted through the read tool. Unknown commands
+// remain available through the write tool and the host's authorization policy.
+const readCommands = new Set([
+  'repo list', 'repo show', 'repo search-refs',
+  'worktree list', 'worktree ps', 'worktree current', 'worktree show',
+  'terminal list', 'terminal show', 'terminal read', 'terminal wait',
+  'skills get', 'artifacts list',
+]);
+function commandArgs(args) {
+  const argv = args.arguments;
+  if (!Array.isArray(argv) || !argv.length || argv.some(a => typeof a !== 'string' || a.includes('\0')))
+    fail('arguments must be a nonempty array of CLI argument strings, without the executable.');
+  if (!argv[0] || argv[0].startsWith('-') && !['--help', '--version'].includes(argv[0]))
+    fail('Start arguments with an Orca command.');
+  if (args.timeoutSeconds !== undefined && (!Number.isInteger(args.timeoutSeconds) || args.timeoutSeconds < 1 || args.timeoutSeconds > 120))
+    fail('timeoutSeconds must be an integer from 1 to 120.');
+  return argv;
+}
+function isReadCommand(argv) {
+  const commandWords = words => words.every(word => /^[a-z][a-z0-9-]*$/.test(word));
+  if (argv.length === 1 && ['--version', '--help'].includes(argv[0])) return true;
+  if (argv[0] === 'help' && commandWords(argv.slice(1))) return true;
+  if (argv.at(-1) === '--help' && commandWords(argv.slice(0, -1))) return true;
+  if (argv[0] === 'status') return argv.length === 1 || argv.slice(1).every(a => a === '--json');
+  // Classify by the actual command prefix; help flags used as argument values
+  // must not turn a mutation into an observation.
+  return readCommands.has(argv.slice(0, 2).join(' '));
+}
+async function runCommand(args, ctx, argv) {
+  const text = argv[0] === 'skills' || argv[0] === 'help' || argv.includes('--help') || argv.includes('--version');
+  const output = await ctx.exec(ctx.configuration.cli_path || 'orca',
+    text || argv.includes('--json') ? argv : [...argv, '--json'],
+    { timeoutSeconds: args.timeoutSeconds ?? 20 });
+  let envelope;
+  try { envelope = JSON.parse(output.stdout); } catch { /* CLI help and skills are plain text. */ }
+  if (output.exitCode !== 0 || envelope?.ok === false)
+    fail(JSON.stringify(envelope?.error ?? { exitCode: output.exitCode, stdout: output.stdout, stderr: output.stderr }));
+  return { exitCode: output.exitCode, ...(envelope ? { result: envelope.result ?? envelope } : { stdout: output.stdout }),
+    ...(output.stderr ? { stderr: output.stderr } : {}) };
+}
+async function cliQuery(args, ctx) {
+  const argv = commandArgs(args);
+  if (!isReadCommand(argv)) fail('This command is not classified as read-only. Use cli_execute with the host authorization policy.');
+  return runCommand(args, ctx, argv);
+}
+async function cliExecute(args, ctx) {
+  const argv = commandArgs(args);
+  const s = state(ctx); s.commands ??= {};
+  const existing = s.commands[ctx.requestID];
+  if (existing) return existing;
+  const record = s.commands[ctx.requestID] = { arguments: argv, stage: 'unknown' };
+  await save(ctx);
+  try {
+    record.output = await runCommand(args, ctx, argv);
+    record.stage = 'command_returned';
+  } catch (error) { record.error = String(error.message ?? error); }
+  await save(ctx);
+  return record;
+}
 export default { tools: {
-  submit_task: { execute: submit, async readback(_args, ctx) {
-    const record = state(ctx).handoffs[`orca-${shortID(ctx.requestID)}`];
-    if (!record) return null;
-    await recover(record, client(ctx), ctx);
-    return record.stage === 'unknown' ? null : summary(record);
+  cli_query: { execute: cliQuery },
+  cli_execute: { execute: cliExecute, async readback() {
+    // Arbitrary CLI writes need command-specific observations. Never replay here.
+    return null;
   } },
   query_handoff: { execute: query },
   send_message: { execute: send, async readback(_args, ctx, output) {
